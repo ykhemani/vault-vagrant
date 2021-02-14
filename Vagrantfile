@@ -75,7 +75,6 @@ Vagrant.configure("2") do |config|
           'bootstrap_dir'       => bootstrap_dir,
           'vault'               => install_dir + '/vault',
           'VAULT_TLS_DISABLE'   => vault_tls_disable,
-          #'VAULT_FQDN'          => hostname_prefix + i.to_s + hostname_suffix,
           'VAULT_FQDN'          => hostname,
           'vault_license'       => vault_license,
           'tls_private_key'     => tls_private_key,
@@ -87,5 +86,9 @@ Vagrant.configure("2") do |config|
       end
     end
   end
+  # this allows us to resolve vault servers as vault1.local, vault2.local, etc.
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get install -y avahi-daemon libnss-mdns
+  SHELL
 end
 
