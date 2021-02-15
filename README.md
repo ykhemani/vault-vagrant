@@ -39,7 +39,9 @@ brew install vagrant
 
 ### Set Number of Vault Servers, Names and IP Addresses (Optional)
 
-Set the following environment variables to specify the Vault VM hostname and ip.
+The [Vagrantfile](Vagrantfile) brings up one Vault server named vault with private networking and an ip address of `192.168.100.21` by default.
+
+Set the following environment variables to specify the number of Vault servers, the hostnaming and ip address range.
 
 ```
 export vault_server_count=2 # optional - defaults to 1 if not specified
@@ -64,26 +66,29 @@ grep ${vault_hostname_prefix} /etc/hosts
 Doing so will enable you to communicate from your host to the Vault servers provisioned by name without having to ssh into them.
 
 ### TLS Support (Optional)
+
+The [Vagrantfile](Vagrantfile) doesn't configure TLS by default.
+
 To enable TLS:
-  * set environment variable `vault_tls_disable` to `false`
-    ```
-    export vault_tls_disable=false
-     ```
-  * set environment variable `tls_private_key` to name of file containing TLS Private Key. For example:
-    ```
-    export tls_private_key=privkey.pem
-    ```
-  * set environment variable `tls_certificate` to name of file containing TLS Certificate and CA Chain. For example:
-    ```
-    export tls_certificate=fullchain.pem
-    ```
-  * place the two aforementioned files in the `files` directory. They will copied from here onto each Vault server that is provisioned.
+* set environment variable `vault_tls_disable` to `false`
+  ```
+  export vault_tls_disable=false
+   ```
+* set environment variable `tls_private_key` to name of file containing TLS Private Key. For example:
+  ```
+  export tls_private_key=privkey.pem
+  ```
+* set environment variable `tls_certificate` to name of file containing TLS Certificate and CA Chain. For example:
+  ```
+  export tls_certificate=fullchain.pem
+  ```
+* place the two aforementioned files in the `files` directory. They will copied from here onto each Vault server that is provisioned.
 
 Please Note: 
-  * There is one private key and TLS certificate being set for all of the Vault servers we're bringing up.
-  * The use of a wildcart certificate enables us to do this from a trusted CA and not get errors.
-  * We may add support for individiual private key and certificate pairs in the future.
-  * Do NOT check these files into version control (at least not the private key). If you name them with a .pem extension, they will be excluded by the .gitignore file.
+* There is one private key and TLS certificate being set for all of the Vault servers we're bringing up.
+* The use of a wildcart certificate enables us to do this from a trusted CA and not get errors.
+* We may add support for individiual private key and certificate pairs in the future.
+* Do NOT check these files into version control (at least not the private key). If you name them with a .pem extension, they will be excluded by the .gitignore file.
 
 ### Select Box Image (Optional)
 The [Vagrantfile](Vagrantfile) uses the [khemani/ubunutu-bionic64-hashistack](https://app.vagrantup.com/khemani/boxes/ubuntu-bionic64-hashistack) Vagrant box by default.
