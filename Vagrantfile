@@ -28,23 +28,31 @@ vault_tls_disable       = ENV['vault_tls_disable']       || 'true'
 tls_private_key         = ENV['tls_private_key']         || 'privkey.pem'
 tls_certificate         = ENV['tls_certificate']         || 'fullchain.pem'
 
+# To set Vault Enterprise license:
+# set the environment variable vault_license with the license (not to the name of a file)
+license                 = ENV['vault_license']           || ''
+
+# Boxes
+box_oss                 = 'khemani/ubuntu-bionic64-hashistack'
+box_oss_version         = '0.0.1'
+box_ent                 = 'khemani/ubuntu-bionic64-hashistack-enterprise'
+box_ent_version         = '0.0.1'
+
+# Box image to use
+box                     = ENV['box']                     || box_oss
+box_version             = ENV['box_version']             || box_oss_version
+
 # Vault Seal
 # When it isn't set, Vault will use Shamir keys for unsealing Vault.
 # This configuration also supports pkcs11 unseal using SoftHSM2.
 # To use pkcs11, set the vault_seal environment variable to pkcs11.
 seal                    = ENV['vault_seal']              || ''
 
-# To set Vault Enterprise license:
-# set the environment variable vault_license with the license (not to the name of a file)
-license                 = ENV['vault_license']           || ''
-
-# Box image to use - Vault Enterprise
-#box                     = ENV['box']                     || 'khemani/ubuntu-bionic64-hashistack-enterprise'
-#box_version             = ENV['box_version']             || '0.0.1'
-
-# Box image to use - Vault Open Source
-box                     = ENV['box']                     || 'khemani/ubuntu-bionic64-hashistack'
-box_version             = ENV['box_version']             || '0.0.1'
+# Use Enterprise image for pkcs11 seal
+if seal == 'pkcs11'
+  box                   = box_ent
+  box_version           = box_ent_version
+end
 
 # The rest of these variables can be left as is, but override if you need to.
 tls_private_key_dir     = ENV['tls_private_key_dir']     || '/etc/ssl/private/'

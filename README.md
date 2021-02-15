@@ -109,7 +109,7 @@ If you would like to use PKCS11 seal to automatically unseal Vault, set the `vau
 export vault_seal=pkcs11
 ```
 
-Please note that the use of `pkcs11` seal requires Vault Enterprise with HSM support, which is included in the `khemani/ubunutu-bionic64-hashistack-enterprise` box.
+Please note that the use of `pkcs11` seal requires Vault Enterprise with HSM support. Setting `vault_pkcs11` will result in the [Vagrantfile](Vagrantfile) automatically using the `khemani/ubunutu-bionic64-hashistack-enterprise` box.
 
 ### Vault Enterprise License (Optional)
 Vault Enterprise requires a license. To get a trial license, please contact [sales@hashicorp.com](mailto:sales@hashicorp.com).
