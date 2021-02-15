@@ -11,6 +11,8 @@ export tls_certificate=${tls_certificate:-fullchain.pem}
 export tls_private_key_dir=${tls_private_key_dir:-/etc/ssl/private}
 export tls_certificate_dir=${tls_certificate_dir:-/etc/ssl/certs}
 
+export seal=${seal}
+
 export vault=${vault:-/usr/local/bin/vault}
 
 export vault_config_dir=${vault_config_dir:-/etc/vault.d}
@@ -88,28 +90,41 @@ chown -R ${vault_user}:${vault_user} \
   ${vault_audit_raw_dir}
 
 # HSM setup
-mkdir -p /var/lib/softhsm/tokens
-chown ${vault_user}:softhsm /var/lib/softhsm/tokens
+if [ "${seal}" == "pkcs11" ]
+then
+  mkdir -p /var/lib/softhsm/tokens
+  chown ${vault_user}:softhsm /var/lib/softhsm/tokens
 
-sudo -u vault softhsm2-util \
-  --init-token \
-  --slot 0 \
-  --label hsm_vault \
-  --pin 1234 \
-  --so-pin 0000
+  sudo -u vault softhsm2-util \
+    --init-token \
+    --slot 0 \
+    --label hsm_vault \
+    --pin 1234 \
+    --so-pin 0000
 
-export VAULT_HSM_SLOT=$(softhsm2-util --show-slots | grep ^Slot  | head -1 | awk '{print $2}')
+  export VAULT_HSM_SLOT=$(softhsm2-util --show-slots | grep ^Slot  | head -1 | awk '{print $2}')
+
+  read -r -d '' seal_stanza <<END_OF_SEAL_STANZA
+seal "pkcs11" {
+  lib            = "/usr/lib/softhsm/libsofthsm2.so"
+}
+END_OF_SEAL_STANZA
+
+  read -r -d '' pkcs11_environment <<END_OF_PKCS11_ENVIRONMENT
+Environment=VAULT_HSM_LIB=/usr/lib/softhsm/libsofthsm2.so
+Environment=VAULT_HSM_TYPE=pkcs11
+Environment=VAULT_HSM_SLOT=${VAULT_HSM_SLOT}
+Environment=VAULT_HSM_PIN=1234
+Environment=VAULT_HSM_KEY_LABEL=key
+Environment=VAULT_HSM_HMAC_KEY_LABEL=hmac-key
+Environment=VAULT_HSM_GENERATE_KEY=true
+END_OF_PKCS11_ENVIRONMENT
+
+fi
 
 cat << EOF > ${vault_config}
 
-seal "pkcs11" {
-  lib            = "/usr/lib/softhsm/libsofthsm2.so"
-  slot           = ${VAULT_HSM_SLOT}
-  pin            = "1234"
-  key_label      = "key"
-  hmac_key_label = "hmac-key"
-  generate_key   = "true"
-}
+${seal_stanza}
 
 storage "raft" {
   path            = "${vault_data_dir}"
@@ -168,13 +183,7 @@ Capabilities=CAP_IPC_LOCK+ep
 CapabilityBoundingSet=CAP_SYSLOG CAP_IPC_LOCK
 NoNewPrivileges=yes
 Environment=VAULT_SKIP_VERIFY=true
-Environment=VAULT_HSM_LIB=/usr/lib/softhsm/libsofthsm2.so
-Environment=VAULT_HSM_TYPE=pkcs11
-Environment=VAULT_HSM_SLOT=${VAULT_HSM_SLOT}
-Environment=VAULT_HSM_PIN=1234
-Environment=VAULT_HSM_KEY_LABEL=key
-Environment=VAULT_HSM_HMAC_KEY_LABEL=hmac-key
-Environment=VAULT_HSM_GENERATE_KEY=true
+${pkcs11_environment}
 ExecStart=${vault} server -config=${vault_config}
 ExecReload=/bin/kill --signal HUP $MAINPID
 KillMode=process
@@ -204,17 +213,46 @@ do
 done
 
 echo "Initializing Vault"
+
+if [ "${seal}" == "pkcs11" ]
+then
+  init_json_payload='{"recovery_shares":1,"recovery_threshold":1}'
+else
+  init_json_payload='{"secret_shares":1,"secret_threshold":1}'
+fi
+
 curl \
   --insecure \
   -s \
   --header "X-Vault-Request: true" \
   --request PUT \
-  --data '{"recovery_shares":1,"recovery_threshold":1}' \
+  --data "${init_json_payload}" \
   $VAULT_ADDR/v1/sys/init \
   > ${vault_init_keys}
 
 export VAULT_TOKEN=$(cat ${vault_init_keys} | jq -r '.root_token')
 export VAULT_SKIP_VERIFY=true
+
+if [ "${seal}" == "" ]
+then
+  export UNSEAL_KEY=$(cat ${vault_init_keys} | jq -r .keys[])
+
+  # unseal with shamir unseal key
+  echo "Waiting for $VAULT_ADDR/v1/sys/health to return 503 (sealed)."
+  vault_http_return_code=0
+  while [ "$vault_http_return_code" != "503" ]
+  do
+    vault_http_return_code=$(curl --insecure -s -o /dev/null -w "%{http_code}" $VAULT_ADDR/v1/sys/health)
+    sleep 1
+  done
+
+  echo "Unsealing Vault"
+  curl \
+    -s \
+    --request PUT \
+    --data "{\"key\": \"${UNSEAL_KEY}\"}" \
+    $VAULT_ADDR/v1/sys/unseal | jq -r .
+fi
 
 cat << EOF > ${vaultrc}
 #!/bin/bash
@@ -222,7 +260,7 @@ cat << EOF > ${vaultrc}
 export VAULT_TOKEN=$VAULT_TOKEN
 export VAULT_ADDR=${VAULT_ADDR}
 export VAULT_SKIP_VERIFY=true
-
+export UNSEAL_KEY=${UNSEAL_KEY}
 EOF
 
 echo "Waiting for $VAULT_ADDR/v1/sys/health to return 200 (initialized, unsealed, active)."
@@ -235,21 +273,11 @@ done
 
 # Enable audit log
 echo "Enabling audit device ${vault_audit}."
-
-# curl \
-#   -s \
-#   --insecure \
-#   --header "X-Vault-Token: $VAULT_TOKEN" \
-#   --request PUT \
-#   --data "{\"type\" : \"file\", \"options\" : { \"file_path\" : \"${vault_audit}\" } }" \
-#   $VAULT_ADDR/v1/sys/audit/audit
-
 ${vault} audit enable \
   file \
   file_path=${vault_audit} 2>&1 > ${vault_top}/vault_audit_enable.out
 
 echo "Enabling raw audit device ${vault_audit_raw}."
-
 ${vault} audit enable \
   -path=raw file \
   file_path=${vault_audit_raw} \
@@ -272,7 +300,7 @@ fi
 echo ". ${vaultrc}" > ~vagrant/.bash_profile
 
 echo "Vault is ready for use."
-echo "Please source vaultrc file ${vaultrc} to configure your environment. This has been added to vagrant's .bash_profile"
+echo "Please source vaultrc file ${vaultrc} to configure your environment. The following line has also been added to vagrant's .bash_profile --"
 echo ". ${vaultrc}"
 
 echo "VAULT_ADDR is ${VAULT_ADDR}"

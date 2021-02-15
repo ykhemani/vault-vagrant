@@ -28,12 +28,22 @@ vault_tls_disable       = ENV['vault_tls_disable']       || 'true'
 tls_private_key         = ENV['tls_private_key']         || 'privkey.pem'
 tls_certificate         = ENV['tls_certificate']         || 'fullchain.pem'
 
+# Vault Seal
+# When it isn't set, Vault will use Shamir keys for unsealing Vault.
+# This configuration also supports pkcs11 unseal using SoftHSM2.
+# To use pkcs11, set the vault_seal environment variable to pkcs11.
+seal                    = ENV['vault_seal']              || ''
+
 # To set Vault Enterprise license:
 # set the environment variable vault_license with the license (not to the name of a file)
-vault_license           = ENV['vault_license']           || ''
+license                 = ENV['vault_license']           || ''
 
-# Box image to use.
-box                     = ENV['box']                     || 'khemani/ubuntu-bionic64-hashistack-enterprise'
+# Box image to use - Vault Enterprise
+#box                     = ENV['box']                     || 'khemani/ubuntu-bionic64-hashistack-enterprise'
+#box_version             = ENV['box_version']             || '0.0.1'
+
+# Box image to use - Vault Open Source
+box                     = ENV['box']                     || 'khemani/ubuntu-bionic64-hashistack'
 box_version             = ENV['box_version']             || '0.0.1'
 
 # The rest of these variables can be left as is, but override if you need to.
@@ -76,19 +86,20 @@ Vagrant.configure("2") do |config|
           'vault'               => install_dir + '/vault',
           'VAULT_TLS_DISABLE'   => vault_tls_disable,
           'VAULT_FQDN'          => hostname,
-          'vault_license'       => vault_license,
+          'license'             => license,
           'tls_private_key'     => tls_private_key,
           'tls_certificate'     => tls_certificate,
           'tls_private_key_dir' => tls_private_key_dir,
-          'tls_certificate_dir' => tls_certificate_dir
+          'tls_certificate_dir' => tls_certificate_dir,
+          'seal'                => seal
         }
         vault.path = 'files/vault_bootstrap.sh'
       end
     end
   end
   # this allows us to resolve vault servers as vault1.local, vault2.local, etc.
-  config.vm.provision "shell", inline: <<-SHELL
-    apt-get install -y avahi-daemon libnss-mdns
-  SHELL
+  #config.vm.provision "shell", inline: <<-SHELL
+  #  apt-get install -y avahi-daemon libnss-mdns
+  #SHELL
 end
 
