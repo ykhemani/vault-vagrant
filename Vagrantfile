@@ -34,9 +34,9 @@ license                 = ENV['vault_license']           || ''
 
 # Boxes
 box_oss                 = 'khemani/ubuntu-bionic64-hashistack'
-box_oss_version         = '0.0.1'
+box_oss_version         = '0.0.3'
 box_ent                 = 'khemani/ubuntu-bionic64-hashistack-enterprise'
-box_ent_version         = '0.0.1'
+box_ent_version         = '0.0.3'
 
 # Box image to use
 box                     = ENV['box']                     || box_oss
@@ -70,6 +70,30 @@ vault_config_dir        = '/etc/vault.d'
 vault_user              = 'vault'
 
 Vagrant.configure("2") do |config|
+  config.vm.define 'www' do |www|
+    www.vm.box          = box_ent
+    www.vm.box_version  = box_ent_version
+    www.vm.hostname     = 'www.hashi.cloud'
+    www.vm.network   :private_network, ip: '192.168.100.31'
+    www.vm.provider "virtualbox" do |vb|
+      vb.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+      vb.cpus   = 1
+      vb.memory = 256
+    end
+  end
+
+  config.vm.define 'db' do |db|
+    db.vm.box          = box_ent
+    db.vm.box_version  = box_ent_version
+    db.vm.hostname     = 'db.hashi.cloud'
+    db.vm.network   :private_network, ip: '192.168.100.32'
+    db.vm.provider "virtualbox" do |vb|
+      vb.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+      vb.cpus   = 1
+      vb.memory = 256
+    end
+  end
+
   (1..server_count).each do |i|
     config.vm.provider "viritualbox" do |vb|
       vb.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
@@ -105,9 +129,5 @@ Vagrant.configure("2") do |config|
       end
     end
   end
-  # this allows us to resolve vault servers as vault1.local, vault2.local, etc.
-  #config.vm.provision "shell", inline: <<-SHELL
-  #  apt-get install -y avahi-daemon libnss-mdns
-  #SHELL
 end
 
